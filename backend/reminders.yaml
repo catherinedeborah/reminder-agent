@@ -1,0 +1,111 @@
+# Configuration-driven Reminder Agent Settings
+# You can define reminder config entries here. The backend automatically imports these on startup,
+# and you can run them directly in command-line mode using trigger_yaml.py.
+
+reminders:
+  - name: "Sprint Hygiene Alert"
+    type: "SUBTASK_CREATION_REMINDER"
+    category: "hygiene"
+    schedule: "0 9 * * 1-5"
+    enabled: true
+    recipients:
+      users: ["alice", "bob", "arunj"]
+      groups: ["dev-team"]
+    channels: ["slack", "email"]
+    template_string: |
+      Hi {{ assignee }},
+
+      Here’s your consolidated sprint hygiene check:
+
+      🔴 Tasks Missing Subtasks:
+      {% for item in missing_subtasks -%}
+      - {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}
+      {% else -%}
+      - None
+      {% endfor %}
+
+      Summary:
+      - Total Issues: {{ total_issues }}
+      - Action Required: {{ action_required }}
+
+      Please review your dashboard and create the necessary subtasks.
+    tool_hints: ["JiraTool"]
+    metadata_json:
+      project_keys: ["ABC", "DEF"]
+    aggregation:
+      combine_alerts: true
+      group_by: ["assignee"]
+    execution:
+      allow_multi_tool: true
+      allow_multi_query: true
+
+  - name: "Sprint Mid Progress & Stale Status Alert"
+    type: "STATUS_UPDATE_REMINDER"
+    category: "sprint"
+    schedule: "0 9 * * 1-5"
+    enabled: true
+    recipients:
+      users: ["alice", "bob", "arunj"]
+    channels: ["slack"]
+    template_string: |
+      Hi {{ assignee }},
+
+      You have sprint progress items requiring immediate attention:
+
+      🟡 Tasks Without Recent Updates:
+      {% for item in stale_status -%}
+      - {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}
+      {% else -%}
+      - None
+      {% endfor %}
+
+      🔵 Mid Sprint Attention Needed:
+      {% for item in mid_progress_issues -%}
+      - {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}
+      {% else -%}
+      - None
+      {% endfor %}
+
+      Summary:
+      - Total Issues: {{ total_issues }}
+      - Action Required: {{ action_required }}
+    tool_hints: ["JiraTool"]
+    metadata_json:
+      project_keys: ["ABC", "XYZ", "DEF"]
+    aggregation:
+      combine_alerts: true
+      group_by: ["assignee"]
+    execution:
+      allow_multi_tool: true
+      allow_multi_query: true
+
+  - name: "PLM Approvals & TAT Breach Check"
+    type: "PLM_TAT_BREACH"
+    category: "kpi"
+    schedule: "0 9 * * 1-5"
+    enabled: true
+    recipients:
+      users: ["alice", "bob", "arunj"]
+    channels: ["email"]
+    template_string: |
+      Hi {{ assignee }},
+
+      The following PLM parts are breaching their Turnaround Time (TAT) thresholds and require approval:
+
+      🟡 PLM Turnaround Time Breaches:
+      {% for item in stale_status -%}
+      - {{ make_link(item.system, item.issue_key) }} : {{ item.summary }} (Status: {{ item.status }})
+      {% else -%}
+      - None
+      {% endfor %}
+
+      Summary:
+      - Total Pending Items: {{ total_issues }}
+    tool_hints: ["PLMTool"]
+    metadata_json: {}
+    aggregation:
+      combine_alerts: true
+      group_by: ["assignee"]
+    execution:
+      allow_multi_tool: true
+      allow_multi_query: true
