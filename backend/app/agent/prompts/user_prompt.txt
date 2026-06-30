@@ -1,0 +1,7 @@
+Current Date/Time: {current_date}
+Sprint Day Context: {sprint_day_context}
+
+Active Configurations to Execute:
+{configurations}
+
+Please analyze the configurations, execute the required queries, aggregate the findings, and notify the respective developers.

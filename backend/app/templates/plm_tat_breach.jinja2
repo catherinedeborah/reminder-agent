@@ -1,0 +1,15 @@
+Hi {{ assignee }},
+
+The following Product Lifecycle Management (PLM) parts are breaching their Turnaround Time (TAT) thresholds and require approval:
+
+🟡 PLM Turnaround Time Breaches:
+{% for item in stale_status -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Status: {{ item.status }}, Last Updated: {{ item.last_updated }})
+{% else -%}
+- None
+{% endfor %}
+
+Summary:
+- Total Pending Items: {{ total_issues }}
+
+Please review and take the necessary actions.

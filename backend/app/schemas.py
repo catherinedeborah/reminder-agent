@@ -29,7 +29,7 @@ class ReminderConfigBase(BaseModel):
     enabled: bool = True
     recipients: Dict[str, Any] = Field(default_factory=dict)
     channels: List[str] = Field(default_factory=list)
-    template_string: str
+    template_string: Optional[str] = None
     tool_hints: List[str] = Field(default_factory=list)
     data_requirements: Dict[str, Any] = Field(default_factory=dict)
     aggregation: Dict[str, Any] = Field(default_factory=lambda: {"group_by": ["assignee"], "combine_alerts": True})
@@ -37,6 +37,10 @@ class ReminderConfigBase(BaseModel):
     metadata_json: Dict[str, Any] = Field(default_factory=dict)
     retry_policy: Dict[str, Any] = Field(default_factory=dict)
     notification_rules: Dict[str, Any] = Field(default_factory=dict)
+    board_id: Optional[int] = None
+    sprint_start_enabled: bool = False
+    sprint_mid_enabled: bool = False
+    sprint_end_enabled: bool = False
 
 class ReminderConfigCreate(ReminderConfigBase):
     pass
@@ -57,6 +61,10 @@ class ReminderConfigUpdate(BaseModel):
     metadata_json: Optional[Dict[str, Any]] = None
     retry_policy: Optional[Dict[str, Any]] = None
     notification_rules: Optional[Dict[str, Any]] = None
+    board_id: Optional[int] = None
+    sprint_start_enabled: Optional[bool] = None
+    sprint_mid_enabled: Optional[bool] = None
+    sprint_end_enabled: Optional[bool] = None
 
 class ReminderConfigResponse(ReminderConfigBase):
     id: str

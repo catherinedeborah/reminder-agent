@@ -3,7 +3,7 @@ from app.services.aggregation import (
     normalize_data,
     deduplicate_alerts,
     group_by_assignee,
-    categorize_for_assignee,
+    categorize_sprint_issues,
     render_template,
     make_link
 )
@@ -77,28 +77,53 @@ def test_group_by_assignee():
     assert len(grouped["alice"]) == 2
     assert len(grouped["bob"]) == 1
 
-def test_categorize_for_assignee():
+def test_categorize_sprint_issues():
     alerts = [
-        {"category": "missing_subtasks", "issue_key": "ABC-123"},
-        {"category": "stale_status", "issue_key": "XYZ-789"},
-        {"category": "mid_progress_issues", "issue_key": "DEF-111"},
-        {"category": "missing_tasks", "issue_key": "GHI-222"},
-        {"category": "other", "issue_key": "JKL-333"},
+        {
+            "issue_key": "ABC-123",
+            "summary": "Design Database Schema",
+            "status": "In Progress",
+            "system": "jira",
+            "raw_item": {"has_subtasks": False, "is_subtask": False, "subtasks": [], "timespent": 0}
+        },
+        {
+            "issue_key": "XYZ-789",
+            "summary": "Create React Components",
+            "status": "To Do",
+            "system": "jira",
+            "raw_item": {"has_subtasks": True, "is_subtask": False, "subtasks": [{"status": "To Do"}]}
+        },
+        {
+            "issue_key": "ABC-222",
+            "summary": "Fix Navbar alignment",
+            "status": "In Progress",
+            "system": "jira",
+            "raw_item": {"has_subtasks": True, "is_subtask": False, "subtasks": [{"status": "In Progress"}], "timespent": 0, "worklogs": []}
+        }
     ]
-    cats = categorize_for_assignee(alerts)
+    
+    cats = categorize_sprint_issues(alerts, days_left=5)
     assert len(cats["missing_subtasks"]) == 1
-    assert len(cats["stale_status"]) == 1
-    assert len(cats["mid_progress_issues"]) == 1
-    assert len(cats["missing_tasks"]) == 1
-    assert len(cats["other"]) == 1
+    assert len(cats["not_in_progress"]) == 1
+    assert len(cats["missing_efforts"]) == 1
+    assert cats["is_perfect_state"] is False
+    
+    cats_near_end = categorize_sprint_issues(alerts, days_left=2)
+    assert len(cats_near_end["near_end_unstarted"]) == 1
 
 def test_template_rendering():
     categorized = {
+        "active_tasks": [
+            {"issue_key": "ABC-123", "summary": "Subtask task", "system": "jira"},
+            {"issue_key": "XYZ-789", "summary": "Stale task", "system": "jira"}
+        ],
         "missing_subtasks": [{"issue_key": "ABC-123", "summary": "Subtask task", "system": "jira"}],
-        "stale_status": [{"issue_key": "XYZ-789", "summary": "Stale task", "system": "jira"}],
-        "mid_progress_issues": [],
-        "missing_tasks": [],
-        "other": []
+        "not_in_progress": [{"issue_key": "XYZ-789", "summary": "Stale task", "system": "jira"}],
+        "missing_efforts": [],
+        "near_end_unstarted": [],
+        "is_perfect_state": False,
+        "total_issues": 2,
+        "action_required": 2
     }
     
     template = """Hi {{ assignee }},
@@ -106,8 +131,8 @@ def test_template_rendering():
 {% for item in missing_subtasks -%}
 - {{ make_link(item.system, item.issue_key) }}: {{ item.summary }}
 {% endfor %}
-🟡 Tasks Without Recent Updates:
-{% for item in stale_status -%}
+🟡 Tasks Not in Progress:
+{% for item in not_in_progress -%}
 - {{ make_link(item.system, item.issue_key) }}: {{ item.summary }}
 {% endfor %}
 Summary:
@@ -118,7 +143,7 @@ Summary:
     rendered_slack = render_template("alice", categorized, template, "slack")
     assert "Hi alice" in rendered_slack
     assert "🔴 Tasks Missing Subtasks:\n- [ABC-123](https://jira.mycompany.com/browse/ABC-123): Subtask task" in rendered_slack
-    assert "🟡 Tasks Without Recent Updates:\n- [XYZ-789](https://jira.mycompany.com/browse/XYZ-789): Stale task" in rendered_slack
+    assert "🟡 Tasks Not in Progress:\n- [XYZ-789](https://jira.mycompany.com/browse/XYZ-789): Stale task" in rendered_slack
     assert "Summary:\n- Total Issues: 2" in rendered_slack
 
     # Test for Email channel

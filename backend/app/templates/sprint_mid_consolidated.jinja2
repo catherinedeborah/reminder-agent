@@ -1,0 +1,44 @@
+Hi {{ assignee }},
+
+Here is your consolidated sprint status update:
+
+{% if missing_subtasks -%}
+🔴 Tasks Missing Subtasks:
+{% for item in missing_subtasks -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Please create subtasks for this story)
+{% endfor %}
+{% endif -%}
+
+{% if not_in_progress -%}
+🟡 Tasks Not in Progress:
+{% for item in not_in_progress -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Has subtasks, but none are active. Please move to In Progress if you are working on it)
+{% endfor %}
+{% endif -%}
+
+{% if missing_efforts -%}
+🟠 Tasks with Missing Effort Logs:
+{% for item in missing_efforts -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Status is In Progress, but no efforts have been logged. Please log your work hours)
+{% endfor %}
+{% endif -%}
+
+{% if near_end_unstarted -%}
+⚠️ Sprint Closure Approaching ({{ days_left }} days left):
+The following tasks are not yet started (To Do status). They are at risk of spillover; please start work on them or move them to the next sprint/backlog:
+{% for item in near_end_unstarted -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }}
+{% endfor %}
+{% endif -%}
+
+{% if is_perfect_state -%}
+🎉 Excellent Work!
+- You have created all necessary subtasks.
+- Your tickets are actively in progress.
+- Your work logs are up to date.
+Keep up the great discipline!
+{% endif -%}
+
+📋 Summary of Active Work:
+- Total Sprint Tasks: {{ total_issues }}
+- Action Required: {{ action_required }}

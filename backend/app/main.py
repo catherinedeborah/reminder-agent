@@ -84,14 +84,18 @@ def startup_event():
                             enabled=r_data.get("enabled", True),
                             recipients=r_data.get("recipients", {}),
                             channels=r_data.get("channels", ["slack"]),
-                            template_string=r_data["template_string"],
+                            template_string=r_data.get("template_string"),
                             tool_hints=r_data.get("tool_hints", []),
                             data_requirements=r_data.get("data_requirements", {}),
                             aggregation=r_data.get("aggregation", {"combine_alerts": True}),
                             execution=r_data.get("execution", {}),
                             metadata_json=r_data.get("metadata_json", {}),
                             retry_policy=r_data.get("retry_policy", {}),
-                            notification_rules=r_data.get("notification_rules", {})
+                            notification_rules=r_data.get("notification_rules", {}),
+                            board_id=r_data.get("board_id"),
+                            sprint_start_enabled=r_data.get("sprint_start_enabled", False),
+                            sprint_mid_enabled=r_data.get("sprint_mid_enabled", False),
+                            sprint_end_enabled=r_data.get("sprint_end_enabled", False)
                         )
                         db.add(new_config)
                         logger.info(f"Seeding: Added reminder configuration '{r_data['name']}' from reminders.yaml")
@@ -166,21 +170,7 @@ def create_reminder(
     current_user: User = Depends(get_current_user)
 ):
     new_config = ReminderConfig(
-        name=reminder_data.name,
-        type=reminder_data.type,
-        category=reminder_data.category,
-        schedule=reminder_data.schedule,
-        enabled=reminder_data.enabled,
-        recipients=reminder_data.recipients,
-        channels=reminder_data.channels,
-        template_string=reminder_data.template_string,
-        tool_hints=reminder_data.tool_hints,
-        data_requirements=reminder_data.data_requirements,
-        aggregation=reminder_data.aggregation,
-        execution=reminder_data.execution,
-        metadata_json=reminder_data.metadata_json,
-        retry_policy=reminder_data.retry_policy,
-        notification_rules=reminder_data.notification_rules
+        **reminder_data.model_dump()
     )
     db.add(new_config)
     db.commit()

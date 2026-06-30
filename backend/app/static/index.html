@@ -724,20 +724,24 @@
             const openCreateModal = () => {
                 setCurrentConfig({
                     name: "",
-                    type: "SUBTASK_CREATION_REMINDER",
-                    category: "hygiene",
+                    type: "SPRINT_BOARD_ALERTS",
+                    category: "sprint",
                     schedule: "0 9 * * 1-5",
                     enabled: true,
-                    recipients: { users: ["alice", "bob", "arunj"], groups: ["dev-team"] },
-                    channels: ["slack"],
-                    template_string: `Hi {{ assignee }},\n\nHere’s your consolidated sprint update:\n\n🔴 Tasks Missing Subtasks:\n{% for item in missing_subtasks -%}\n- {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}\n{% else -%}\n- None\n{% endfor %}\n🟡 Tasks Without Recent Updates:\n{% for item in stale_status -%}\n- {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}\n{% else -%}\n- None\n{% endfor %}\n🔵 Mid Sprint Attention Needed:\n{% for item in mid_progress_issues -%}\n- {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}\n{% else -%}\n- None\n{% endfor %}\n⚪ Tasks Not Created:\n{% for item in missing_tasks -%}\n- {{ make_link(item.system, item.issue_key) }} : {{ item.summary }}\n{% else -%}\n- None\n{% endfor %}\nSummary:\n- Total Issues: {{ total_issues }}\n- Action Required: {{ action_required }}\n\nPlease take action.`,
+                    recipients: { users: ["alice", "bob", "arunj", "charlie", "david"], groups: ["dev-team"] },
+                    channels: ["slack", "email"],
+                    template_string: "",
                     tool_hints: ["JiraTool"],
                     data_requirements: {},
                     aggregation: { group_by: ["assignee"], combine_alerts: true },
                     execution: { allow_multi_tool: true, allow_multi_query: true },
                     metadata_json: { project_keys: ["ABC", "XYZ", "DEF"] },
                     retry_policy: {},
-                    notification_rules: {}
+                    notification_rules: {},
+                    board_id: 123,
+                    sprint_start_enabled: true,
+                    sprint_mid_enabled: true,
+                    sprint_end_enabled: true
                 });
                 setShowModal(true);
             };
@@ -979,6 +983,7 @@
                                         value={formData.type} 
                                         onChange={(e) => handleChange("type", e.target.value)}
                                     >
+                                        <option value="SPRINT_BOARD_ALERTS">SPRINT_BOARD_ALERTS (Multi-Alert)</option>
                                         <option value="SPRINT_MID_PROGRESS_CHECK">SPRINT_MID_PROGRESS_CHECK</option>
                                         <option value="TASK_CREATION_REMINDER">TASK_CREATION_REMINDER</option>
                                         <option value="SUBTASK_CREATION_REMINDER">SUBTASK_CREATION_REMINDER</option>
@@ -1003,6 +1008,51 @@
                                         <option value="other">other</option>
                                     </select>
                                 </div>
+                                {formData.type === "SPRINT_BOARD_ALERTS" && (
+                                    <>
+                                        <div className="form-group">
+                                            <label className="form-label">Jira Board ID</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-input" 
+                                                value={formData.board_id || ""} 
+                                                onChange={(e) => handleChange("board_id", e.target.value ? parseInt(e.target.value) : null)} 
+                                            />
+                                        </div>
+                                        <div className="form-group col-full">
+                                            <label className="form-label">Sprint Day Reminders Enabled</label>
+                                            <div className="checkbox-group">
+                                                <label className="checkbox-label">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="checkbox-input" 
+                                                        checked={formData.sprint_start_enabled || false} 
+                                                        onChange={(e) => handleChange("sprint_start_enabled", e.target.checked)} 
+                                                    />
+                                                    <span>Start Day</span>
+                                                </label>
+                                                <label className="checkbox-label">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="checkbox-input" 
+                                                        checked={formData.sprint_mid_enabled || false} 
+                                                        onChange={(e) => handleChange("sprint_mid_enabled", e.target.checked)} 
+                                                    />
+                                                    <span>Mid Sprint</span>
+                                                </label>
+                                                <label className="checkbox-label">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="checkbox-input" 
+                                                        checked={formData.sprint_end_enabled || false} 
+                                                        onChange={(e) => handleChange("sprint_end_enabled", e.target.checked)} 
+                                                    />
+                                                    <span>End/Closure</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="form-group">
                                     <label className="form-label">Schedule (Cron)</label>
                                     <input 

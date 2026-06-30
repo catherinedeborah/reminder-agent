@@ -1,0 +1,20 @@
+Hi {{ assignee }},
+
+Welcome to the new sprint! Here is the list of tasks assigned to you:
+
+{% if total_issues == 0 -%}
+⚠️ You do not have any tasks or stories assigned to you in this sprint. Please contact your product owner or create stories in the backlog to get started.
+{%- else -%}
+📋 Your Sprint Backlog:
+{% for item in active_tasks -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Status: {{ item.status }})
+{% endfor %}
+{% if missing_subtasks -%}
+⚠️ E-day Check: The following stories are missing subtasks. Please create subtasks for them today to clarify implementation details:
+{% for item in missing_subtasks -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+
+Have a productive sprint!

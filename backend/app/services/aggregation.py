@@ -1,5 +1,6 @@
+import os
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from jinja2 import Environment, BaseLoader
 
 def make_link(system: str, key: str, channel: str) -> str:
@@ -19,20 +20,26 @@ def make_link(system: str, key: str, channel: str) -> str:
     else:
         return f"{key} ({url})"
 
+def load_template_file(template_name: str) -> Optional[str]:
+    """Loads a Jinja2 template file from the app/templates directory."""
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        templates_dir = os.path.join(base_dir, "templates")
+        
+        # Clean name and ensure extension
+        clean_name = template_name.replace(".jinja2", "").strip()
+        file_path = os.path.join(templates_dir, f"{clean_name}.jinja2")
+        
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+    except Exception as e:
+        print(f"Error loading template file {template_name}: {str(e)}")
+    return None
+
 def normalize_data(raw_item: Dict[str, Any], source_type: str, alert_type: str, category: str = None) -> Dict[str, Any]:
     """
-    Normalize any tool output (Jira, GitHub, PLM) to the standard format.
-    Schema:
-    {
-      "assignee": str,
-      "issue_key": str,
-      "summary": str,
-      "status": str,
-      "alert_type": str,
-      "category": str,
-      "last_updated": str,
-      "metadata": dict
-    }
+    Normalize tool output (Jira, GitHub, PLM) to the standard format.
     """
     assignee = raw_item.get("assignee", "unassigned")
     
@@ -79,6 +86,7 @@ def normalize_data(raw_item: Dict[str, Any], source_type: str, alert_type: str, 
         "category": category,
         "last_updated": last_updated,
         "system": system,
+        "raw_item": raw_item,  # Keep full payload reference
         "metadata": {
             "project": raw_item.get("project"),
             "sprint_id": raw_item.get("sprint_id")
@@ -86,9 +94,6 @@ def normalize_data(raw_item: Dict[str, Any], source_type: str, alert_type: str, 
     }
 
 def deduplicate_alerts(alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Remove duplicate issues. An issue is a duplicate if it has the same issue_key and alert_type.
-    """
     seen = set()
     deduped = []
     for item in alerts:
@@ -99,9 +104,6 @@ def deduplicate_alerts(alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return deduped
 
 def group_by_assignee(alerts: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Group standard alerts by assignee.
-    """
     grouped = {}
     for item in alerts:
         assignee = item["assignee"]
@@ -110,60 +112,140 @@ def group_by_assignee(alerts: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, 
         grouped[assignee].append(item)
     return grouped
 
-def categorize_for_assignee(alerts: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+def categorize_sprint_issues(user_alerts: List[Dict[str, Any]], days_left: Optional[int] = None) -> Dict[str, Any]:
     """
-    Categorize alerts into categories for template rendering.
+    Sorts a developer's issues into structured lists based on sprint alert rules:
+    - active_tasks: all sprint tasks assigned to user
+    - incomplete_tasks: tasks not in Done status
+    - missing_subtasks: tasks missing subtasks (no subtasks list or has_subtasks=False)
+    - not_in_progress: has subtasks, but none are In Progress, and story is not In Progress
+    - missing_efforts: task is In Progress but timespent is 0 or worklogs list is empty
+    - near_end_unstarted: status is To Do and days_left <= 3
+    - is_perfect_state: True if developer has active tasks and passes all hygiene checks
     """
-    categories = {
-        "missing_subtasks": [],
-        "stale_status": [],
-        "mid_progress_issues": [],
-        "missing_tasks": [],
-        "other": []
+    active_tasks = []
+    incomplete_tasks = []
+    missing_subtasks = []
+    not_in_progress = []
+    missing_efforts = []
+    near_end_unstarted = []
+    
+    for alert in user_alerts:
+        raw = alert.get("raw_item", {})
+        key = alert["issue_key"]
+        summary = alert["summary"]
+        status = alert["status"]
+        system = alert["system"]
+        
+        item_data = {
+            "issue_key": key,
+            "summary": summary,
+            "status": status,
+            "system": system,
+            "raw_item": raw
+        }
+        
+        # Skip items that are not agile tasks/stories (e.g. general commits or PLM items in composite runs)
+        if system not in ("jira", "github") or not key:
+            continue
+            
+        active_tasks.append(item_data)
+        
+        if status.lower() != "done":
+            incomplete_tasks.append(item_data)
+            
+        # 1. Missing subtasks check (ignore subtask issues themselves)
+        is_subtask = raw.get("is_subtask", False)
+        subtasks_list = raw.get("subtasks", [])
+        if not is_subtask and (not raw.get("has_subtasks", True) or len(subtasks_list) == 0):
+            missing_subtasks.append(item_data)
+            
+        # 2. Not in progress check (has subtasks, but none are active)
+        elif not is_subtask and raw.get("has_subtasks", True) and len(subtasks_list) > 0:
+            any_sub_in_progress = any(sub.get("status", "").lower() == "in progress" for sub in subtasks_list)
+            if status.lower() != "in progress" and not any_sub_in_progress:
+                not_in_progress.append(item_data)
+                
+        # 3. Missing efforts check (In Progress but no logged hours)
+        if status.lower() == "in progress":
+            timespent = raw.get("timespent", 0)
+            worklogs = raw.get("worklogs", [])
+            if timespent == 0 or len(worklogs) == 0:
+                missing_efforts.append(item_data)
+                
+        # 4. Near end unstarted check (To Do and sprint ending in <= 3 days)
+        if status.lower() == "to do" and days_left is not None and days_left <= 3:
+            near_end_unstarted.append(item_data)
+            
+    is_perfect_state = (
+        len(active_tasks) > 0 and
+        len(missing_subtasks) == 0 and
+        len(not_in_progress) == 0 and
+        len(missing_efforts) == 0 and
+        len(near_end_unstarted) == 0
+    )
+    
+    action_required = (
+        len(missing_subtasks) + 
+        len(not_in_progress) + 
+        len(missing_efforts) + 
+        len(near_end_unstarted)
+    )
+    
+    return {
+        "active_tasks": active_tasks,
+        "incomplete_tasks": incomplete_tasks,
+        "missing_subtasks": missing_subtasks,
+        "not_in_progress": not_in_progress,
+        "missing_efforts": missing_efforts,
+        "near_end_unstarted": near_end_unstarted,
+        "is_perfect_state": is_perfect_state,
+        "total_issues": len(active_tasks),
+        "action_required": action_required
     }
-    for item in alerts:
-        cat = item["category"]
-        if cat in categories:
-            categories[cat].append(item)
-        else:
-            categories["other"].append(item)
-    return categories
 
-def render_template(assignee: str, categorized: Dict[str, List[Dict[str, Any]]], template_str: str, channel: str) -> str:
+def render_template(assignee: str, categorized: Dict[str, Any], template_str: str, channel: str, days_left: Optional[int] = None) -> str:
     """
     Render Jinja2 template using the categorized items for the assignee.
     """
-    # Create Jinja2 environment from string
     rtemplate = Environment(loader=BaseLoader()).from_string(template_str)
     
-    # Calculate totals
-    total_issues = sum(len(items) for items in categorized.values())
-    action_required = total_issues # By default, all consolidated alerts require action
+    # Calculate fallback totals if not present
+    total_issues = categorized.get("total_issues", len(categorized.get("active_tasks", [])))
+    action_required = categorized.get("action_required", total_issues)
     
     # Add helper function and variables to context
     context = {
         "assignee": assignee,
-        "missing_subtasks": categorized["missing_subtasks"],
-        "stale_status": categorized["stale_status"],
-        "mid_progress_issues": categorized["mid_progress_issues"],
-        "missing_tasks": categorized["missing_tasks"],
-        "other_alerts": categorized["other"],
+        "active_tasks": categorized.get("active_tasks", []),
+        "incomplete_tasks": categorized.get("incomplete_tasks", []),
+        "missing_subtasks": categorized.get("missing_subtasks", []),
+        "not_in_progress": categorized.get("not_in_progress", []),
+        "missing_efforts": categorized.get("missing_efforts", []),
+        "near_end_unstarted": categorized.get("near_end_unstarted", []),
+        "is_perfect_state": categorized.get("is_perfect_state", False),
         "total_issues": total_issues,
         "action_required": action_required,
+        "days_left": days_left,
         "make_link": lambda system, key: make_link(system, key, channel)
     }
     
     return rtemplate.render(context)
 
-def run_aggregation_pipeline(raw_items_with_meta: List[Dict[str, Any]], template_str: str, channel: str) -> Dict[str, str]:
+def run_aggregation_pipeline(
+    raw_items_with_meta: List[Dict[str, Any]], 
+    template_name_or_str: str, 
+    channel: str, 
+    days_left: Optional[int] = None
+) -> Dict[str, str]:
     """
     Runs the complete aggregation pipeline on raw items:
     1. Normalize
     2. Deduplicate
     3. Group by Assignee
-    4. Categorize per Assignee
-    5. Render template per Assignee
-    Returns a dict mapping assignee -> consolidated message.
+    4. Categorize per Assignee (Sprint Day Logic check)
+    5. Dynamically load Template file
+    6. Render template per Assignee
     """
     normalized_list = []
     for item in raw_items_with_meta:
@@ -178,10 +260,15 @@ def run_aggregation_pipeline(raw_items_with_meta: List[Dict[str, Any]], template
     deduped = deduplicate_alerts(normalized_list)
     grouped = group_by_assignee(deduped)
     
+    # Resolve the Jinja2 template content
+    template_content = load_template_file(template_name_or_str)
+    if not template_content:
+        template_content = template_name_or_str # Treat as raw string fallback
+        
     results = {}
     for assignee, user_alerts in grouped.items():
-        categorized = categorize_for_assignee(user_alerts)
-        message = render_template(assignee, categorized, template_str, channel)
+        categorized = categorize_sprint_issues(user_alerts, days_left=days_left)
+        message = render_template(assignee, categorized, template_content, channel, days_left=days_left)
         results[assignee] = message
         
     return results

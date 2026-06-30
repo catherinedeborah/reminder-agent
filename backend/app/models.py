@@ -22,7 +22,7 @@ class ReminderConfig(Base):
     # JSON Fields for configurations
     recipients = Column(JSON, default=dict)  # {"users": [], "groups": [], "dynamic": {}}
     channels = Column(JSON, default=list)    # ["slack", "email", "knox"]
-    template_string = Column(Text, nullable=False)
+    template_string = Column(Text, nullable=True) # Template string is now optional as we load from files
     tool_hints = Column(JSON, default=list)  # ["JiraTool", "GitHubTool"]
     data_requirements = Column(JSON, default=dict)
     aggregation = Column(JSON, default=dict)  # {"group_by": ["assignee"], "combine_alerts": true}
@@ -30,3 +30,9 @@ class ReminderConfig(Base):
     metadata_json = Column(JSON, default=dict) # {"project_keys": [], "sprint_id": ""}
     retry_policy = Column(JSON, default=dict)
     notification_rules = Column(JSON, default=dict)
+
+    # Sprint-specific fields
+    board_id = Column(Integer, nullable=True)
+    sprint_start_enabled = Column(Boolean, default=False)
+    sprint_mid_enabled = Column(Boolean, default=False)
+    sprint_end_enabled = Column(Boolean, default=False)

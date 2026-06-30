@@ -1,0 +1,19 @@
+Hi {{ assignee }},
+
+Today is the final day of the sprint. Please take a few minutes to clean up your tickets:
+
+✅ Completed Work:
+- If you have completed any of your "In Progress" or "Review" tasks, please move them to Done status.
+- Ensure all final efforts and times spent are logged before the sprint closes.
+
+⌛ Unfinished & Stale Items:
+{% if incomplete_tasks -%}
+The following tasks are incomplete and will be carried forward to the next sprint. Please move them to the next sprint board or Product Backlog:
+{% for item in incomplete_tasks -%}
+- {{ make_link(item.system, item.issue_key) }}: {{ item.summary }} (Current Status: {{ item.status }})
+{% endfor %}
+{%- else -%}
+🎉 Great job! You have no incomplete tasks remaining in this sprint.
+{%- endif %}
+
+Please take action today to avoid sprint reporting errors.
